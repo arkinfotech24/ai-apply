@@ -53,6 +53,7 @@ services:
     volumes:
       - ./services/api:/app:delegated
       - artifacts:/data/artifacts
+      - ./packages/schemas:/packages/schemas:delegated
     ports:
       - "8000:8000"
     command: >
