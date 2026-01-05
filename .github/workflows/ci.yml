@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   python-quality:
-    name: Python quality checks (API + Worker + Schemas)
+    name: Python quality checks (optional, non-blocking if tools missing)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,26 +29,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv==0.5.16
 
-      - name: Install dependencies (editable)
+      - name: Install packages (schemas + api + worker)
         run: |
           uv pip install --system -e packages/schemas
           uv pip install --system -e services/api
           uv pip install --system -e services/worker
 
-      # If ruff/mypy/pytest are not in your pyproject deps yet, add them (recommended).
-      - name: Lint (ruff) - if configured
+      - name: Lint (ruff) - if installed
         run: |
           python -c "import ruff" 2>/dev/null && ruff check . || echo "ruff not installed; skipping"
 
-      - name: Format check (ruff format) - if configured
+      - name: Format check (ruff format) - if installed
         run: |
           python -c "import ruff" 2>/dev/null && ruff format --check . || echo "ruff not installed; skipping"
 
-      - name: Type check (mypy) - if configured
+      - name: Type check (mypy) - if installed
         run: |
           python -c "import mypy" 2>/dev/null && mypy services/api services/worker packages/schemas || echo "mypy not installed; skipping"
 
-      - name: Unit tests (pytest) - if configured
+      - name: Unit tests (pytest) - if installed
         run: |
           python -c "import pytest" 2>/dev/null && pytest -q || echo "pytest not installed; skipping"
 
@@ -63,26 +62,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # IMPORTANT: Use service-level build contexts so Dockerfile COPY pyproject.toml works
       - name: Build API image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/api/Dockerfile
+          context: ./services/api
+          file: ./services/api/Dockerfile
           push: false
           tags: ai-apply-api:ci
 
       - name: Build Worker image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/worker/Dockerfile
+          context: ./services/worker
+          file: ./services/worker/Dockerfile
           push: false
           tags: ai-apply-worker:ci
 
   compose-smoke:
-    name: Compose smoke test (optional)
+    name: Compose smoke test (API health)
     runs-on: ubuntu-latest
-    needs: [ docker-build ]
+    needs: [docker-build]
     timeout-minutes: 15
 
     steps:
@@ -92,16 +92,18 @@ jobs:
       - name: Create .env for CI
         run: |
           cp .env.example .env
-          # Keep OpenAI disabled in CI unless you explicitly want it.
-          # CI should NOT fail if OPENAI_API_KEY is missing.
+          # Keep OpenAI empty in CI unless you intentionally add secrets later.
           echo "OPENAI_API_KEY=" >> .env
+          echo "OPENAI_MODEL_TEXT=gpt-4.1-mini" >> .env
+          echo "OPENAI_TIMEOUT_SECONDS=45" >> .env
 
       - name: Compose up
         run: |
           docker compose up -d --build
 
-      - name: Wait for API health
+      - name: Wait for DB + Redis + API health
         run: |
+          echo "Waiting for API /health..."
           for i in {1..60}; do
             if curl -fsS http://localhost:8000/health >/dev/null; then
               echo "API healthy"
