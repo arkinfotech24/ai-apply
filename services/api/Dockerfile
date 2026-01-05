@@ -11,12 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv==0.5.16
 
-# Copy only API project files (context is services/api)
-COPY pyproject.toml /app/pyproject.toml
-RUN uv pip install --system -e /app
-
-# Copy source
+# Copy the full API source first (includes app/, alembic/, etc.)
 COPY . /app
+
+# Install editable after source is present
+RUN uv pip install --system -e /app
 
 EXPOSE 8000
 

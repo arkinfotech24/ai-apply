@@ -11,9 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv==0.5.16
 
-# context is services/worker
-COPY pyproject.toml /app/pyproject.toml
-RUN uv pip install --system -e /app
-
 COPY . /app
+RUN uv pip install --system -e /app
 
