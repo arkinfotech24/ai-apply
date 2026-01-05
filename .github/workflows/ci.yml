@@ -101,19 +101,73 @@ jobs:
         run: |
           docker compose up -d --build
 
-      - name: Wait for DB + Redis + API health
+      - name: Wait for DB health
+        run: |
+          echo "Waiting for db to be healthy..."
+          for i in {1..60}; do
+            DB_STATUS="$(docker inspect -f '{{.State.Health.Status}}' aiapply-db 2>/dev/null || echo starting)"
+            echo "db=$DB_STATUS"
+            if [ "$DB_STATUS" = "healthy" ]; then
+              echo "DB healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "DB never became healthy"
+          docker compose ps
+          docker compose logs --no-color --tail=200 db || true
+          exit 1
+
+      - name: Wait for Redis health
+        run: |
+          echo "Waiting for redis to be healthy..."
+          for i in {1..60}; do
+            REDIS_STATUS="$(docker inspect -f '{{.State.Health.Status}}' aiapply-redis 2>/dev/null || echo starting)"
+            echo "redis=$REDIS_STATUS"
+            if [ "$REDIS_STATUS" = "healthy" ]; then
+              echo "Redis healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Redis never became healthy"
+          docker compose ps
+          docker compose logs --no-color --tail=200 redis || true
+          exit 1
+
+      - name: Wait for API container running
+        run: |
+          echo "Waiting for API container to be running..."
+          for i in {1..60}; do
+            API_STATE="$(docker inspect -f '{{.State.Status}}' aiapply-api 2>/dev/null || echo starting)"
+            API_RESTARTS="$(docker inspect -f '{{.RestartCount}}' aiapply-api 2>/dev/null || echo 0)"
+            echo "api_state=$API_STATE restarts=$API_RESTARTS"
+            if [ "$API_STATE" = "running" ]; then
+              echo "API container running"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API container never reached running state"
+          docker compose ps
+          docker compose logs --no-color --tail=200 api || true
+          exit 1
+
+      - name: Wait for API /health
         run: |
           echo "Waiting for API /health..."
-          for i in {1..60}; do
-            if curl -fsS http://localhost:8000/health >/dev/null; then
+          for i in {1..90}; do
+            if curl -fsS --max-time 2 http://localhost:8000/health >/dev/null; then
               echo "API healthy"
               exit 0
             fi
             sleep 2
           done
-          echo "API never became healthy"
+          echo "API /health never became ready"
           docker compose ps
-          docker compose logs --no-color --tail=200 api
+          docker compose logs --no-color --tail=200 api || true
+          docker compose logs --no-color --tail=200 db || true
+          docker compose logs --no-color --tail=200 redis || true
           exit 1
 
       - name: Logs on failure
