@@ -11,16 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv==0.5.16
 
-COPY pyproject.toml ./
-# Optional: COPY uv.lock ./
+# Copy only API project files (context is services/api)
+COPY pyproject.toml /app/pyproject.toml
+RUN uv pip install --system -e /app
 
-# Install dependencies (editable)
-RUN uv pip install --system -e .
-
-# Shared schemas (editable mount in compose is recommended; copy for container build robustness)
-COPY ../../packages/schemas /packages/schemas
-RUN uv pip install --system -e /packages/schemas
-
+# Copy source
 COPY . /app
 
 EXPOSE 8000
+

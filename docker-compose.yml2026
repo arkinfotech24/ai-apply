@@ -57,10 +57,10 @@ services:
       - "8000:8000"
     command: >
       sh -c "
-      uv pip install --system -e /packages/schemas &&
       alembic upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
       "
+
   worker:
     build:
       context: ./services/worker
@@ -88,7 +88,6 @@ services:
       - ./packages/schemas:/packages/schemas:delegated
     command: >
       sh -c "
-      uv pip install --system -e /packages/schemas &&
       celery -A worker.celery_app:celery_app worker --loglevel=INFO --concurrency=2
       "
 

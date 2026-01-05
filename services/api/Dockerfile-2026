@@ -11,9 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv==0.5.16
 
-# context is services/worker
-COPY pyproject.toml /app/pyproject.toml
+# Install API deps (service-level), not repo root
+COPY services/api/pyproject.toml /app/pyproject.toml
+COPY packages/schemas /packages/schemas
+
+RUN uv pip install --system -e /packages/schemas
 RUN uv pip install --system -e /app
 
-COPY . /app
+# Copy API source
+COPY services/api /app
 
+EXPOSE 8000
